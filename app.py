@@ -7,7 +7,6 @@ import pandas as pd
 from get_data import GetData
 from tkinter import filedialog as fd
 
-
 app = Dash(__name__, external_stylesheets=[dbc.themes.COSMO])
 config = {
     'toImageButtonOptions': {
@@ -41,20 +40,20 @@ grid = dag.AgGrid(
 path_input = html.Div(
     [
         html.P("Load data"),
-        dbc.Button('select files', id='button_upload_files', n_clicks=0),
+        dbc.Row([dbc.Col(dbc.Button('select files', id='button_upload_files', n_clicks=0), width=3),
+                 dbc.Col(dbc.Button("remove files", id="button_delete_files", n_clicks=0, color="warning")), ])
     ]
 )
 
 # Button for data saving to pd.DataFrame
 save_button = html.Div(
     [
-        html.P("Save data to keep in plot"),
+        html.P("Keep selection in plot"),
         dbc.Row([dbc.Col(dbc.Button("keep data", id="button_save_to_container", n_clicks=0), width=3),
                  dbc.Col(dbc.Button("remove data", id="button_delete_containter", n_clicks=0, color="warning")), ]),
         html.P(" "),
         dbc.Alert("no data yet", id="files_saved_to_container", color="success"),
     ],
-    className="mb-4",
 )
 
 # Checklist for file selection
@@ -123,14 +122,15 @@ plotting = html.Div([
     dbc.Card(
         dbc.Tabs([
             dbc.Tab([dcc.Graph(id="line-chart", figure=px.line(), config=config)], label="Line Chart"),
-            #dbc.Tab([dcc.Graph(id="scatter-chart", figure=px.scatter(), config=config)], label="Scatter Chart"),
+            # dbc.Tab([dcc.Graph(id="scatter-chart", figure=px.scatter(), config=config)], label="Scatter Chart"),
             dbc.Tab([grid], label="Data Table", className="p-4")
         ])
     ),
     dbc.Card(
         dbc.CardBody(
             dbc.Row([
-                dbc.Col([html.P('axis label (x, y, title)'), dbc.Input(id="input_x_label", placeholder="x label", size="sm"),
+                dbc.Col([html.P('axis label (x, y, title)'),
+                         dbc.Input(id="input_x_label", placeholder="x label", size="sm"),
                          dbc.Input(id="input_y_label", placeholder="y label", size="sm"),
                          dbc.Input(id="input_plot_label", placeholder="plot title", size="sm")], width=2),
                 dbc.Col([html.P('plot style'), dbc.Switch(id="switch_markers", label="markers", value=False),
@@ -139,6 +139,8 @@ plotting = html.Div([
                          dbc.Switch(id="switch_y_log", label="log y", value=False)], width=2),
                 dbc.Col([html.P('axis reverse'), dbc.Switch(id="switch_x_rev", label="reverse x", value=False),
                          dbc.Switch(id="switch_y_rev", label="reverse y", value=False)], width=2),
+                dbc.Col([html.P('legend'), dbc.Switch(id="switch_legend", label="show legend", value=True),
+                         ], width=2),
             ])
         ), style={"margin-top": "15px"}
     ),
@@ -159,22 +161,29 @@ app.layout = dbc.Container(
 )
 
 
-
 def select_files():
-    filetypes = (('plt files', '*.plt'), ('csv files', '*.csv'), ('All files', '*.*'))
+    filetypes = (('csv files', '*.csv'), ('plt files', '*.plt'), ('All files', '*.*'))
     filenames = fd.askopenfilenames(
         title='Open files',
         initialdir='//depmdfsbackup/Backup/User/RRoe/OpenTCADProjects/',
         filetypes=filetypes)
     return filenames
 
+
 @callback(
     Output("file_use", "options"),
     Output("file_use", "value"),
     Input('button_upload_files', 'n_clicks'),
+    Input('button_delete_files', 'n_clicks'),
     prevent_initial_call=True
 )
-def update_folder(n_clicks):
+def update_folder(b1, b2):
+    triggered_id = ctx.triggered_id
+    if triggered_id == 'button_delete_files':
+        data_reader.file_list = []
+        data_reader.file_list_short = []
+        data_reader.current_item_container = []
+        return [], []
     file_list, file_list_short = data_reader.save_file_to_file_list(list(select_files()))
     if not file_list:
         return [], []
@@ -222,9 +231,9 @@ def modify_container(b1, b2):
             file_list = data_reader.file_list
             file_list_short = data_reader.file_list_short
             for file in item[0]:
-                if file+'_'+item[2] not in data_reader.data_container['file']:
+                if file + '_' + item[2] not in data_reader.data_container['file']:
                     xy = data_reader.parse_file(file_list[file_list_short.index(file)])
-                    data_reader.data_container['file'].append(file+'_'+item[2])
+                    data_reader.data_container['file'].append(file + '_' + item[2])
                     data_reader.data_container['x'].append(list(xy[item[1]]))
                     data_reader.data_container['y'].append(list(xy[item[2]]))
             return f"saved: {data_reader.data_container['file']}"
@@ -239,11 +248,11 @@ def modify_container(b1, b2):
 
 @callback(
     Output("line-chart", "figure"),
-    #Output("scatter-chart", "figure"),
+    # Output("scatter-chart", "figure"),
     Output("grid", "rowData"),
     Output("grid", "columnDefs"),
-    #Output('switch_markers', 'value'),
-    #Output('switch_lines_markers', 'value'),
+    # Output('switch_markers', 'value'),
+    # Output('switch_lines_markers', 'value'),
     # read files from
     Input('file_use', 'value'),
     Input('columns_x', 'value'),
@@ -258,9 +267,10 @@ def modify_container(b1, b2):
     Input('switch_y_log', 'value'),
     Input('switch_x_rev', 'value'),
     Input('switch_y_rev', 'value'),
+    Input('switch_legend', 'value'),
 )
 def update_plot(file_use, x, y, input_x_label, input_y_label, input_plot_label, switch_markers, switch_lines_markers,
-                switch_x_log, switch_y_log, switch_x_rev, switch_y_rev):
+                switch_x_log, switch_y_log, switch_x_rev, switch_y_rev, switch_legend):
     if len(data_reader.data_container['file']) == 0:
         if not file_use or x == '' or y == '':
             print('no files selected to update plot')
@@ -282,15 +292,17 @@ def update_plot(file_use, x, y, input_x_label, input_y_label, input_plot_label, 
     if len(file_use) > 0:
         print('instant_plot')
         for i, file in enumerate(data_plot['file'].unique()):
-            fig.add_trace(go.Scatter(x=data_plot[data_plot['file'] == file][x], y=data_plot[data_plot['file'] == file][y],
-                                     mode='lines', name=file.split('/')[-1], line=dict(color=px.colors.qualitative.D3[i])))
+            fig.add_trace(
+                go.Scatter(x=data_plot[data_plot['file'] == file][x], y=data_plot[data_plot['file'] == file][y],
+                           mode='lines', name=file.split('/')[-1], line=dict(color=px.colors.qualitative.D3[i])))
             count_plot_color += 1
 
     if len(data_reader.data_container['file']) > 0:
         print('saved_plot')
         for i, file in enumerate(data_reader.data_container['file']):
             fig.add_trace(go.Scatter(x=data_reader.data_container['x'][i], y=data_reader.data_container['y'][i],
-                                     mode='lines', name=file, line=dict(color=px.colors.qualitative.D3[i+count_plot_color])))
+                                     mode='lines', name=file,
+                                     line=dict(color=px.colors.qualitative.D3[i + count_plot_color])))
 
     if switch_x_rev:
         fig.update_xaxes(autorange="reversed")
@@ -312,6 +324,8 @@ def update_plot(file_use, x, y, input_x_label, input_y_label, input_plot_label, 
     else:
         fig.update_traces(mode='lines')
 
+    if not switch_legend:
+        fig.update_layout(showlegend=False)
 
     fig.update_layout(title={'text': input_plot_label, 'y': 0.95, 'x': 0.4}, height=800)
     # fig.update_layout(xaxis_range=[0, 2], yaxis_range=[0, 100])
@@ -321,4 +335,3 @@ def update_plot(file_use, x, y, input_x_label, input_y_label, input_plot_label, 
 
 if __name__ == "__main__":
     app.run_server(debug=True, port=8050)
-
