@@ -1,4 +1,4 @@
-from dash import Dash, dcc, html, Input, Output, callback, Patch, clientside_callback, State, ctx
+from dash import Dash, dcc, html, Input, Output, callback, ALL, Patch, clientside_callback, State, ctx
 import plotly.graph_objects as go
 import plotly.express as px
 import dash_bootstrap_components as dbc
@@ -24,7 +24,7 @@ data_reader = GetData()
 # Define the page components before the page is assembled
 # Header
 header = html.H3(
-    "Plot plt- and csv-files", className="bg-primary text-white p-2 mb-2 text-center"
+    "Plot data", className="bg-primary text-white p-2 mb-2 text-center"
 )
 
 # Grid for data overview
@@ -144,6 +144,19 @@ plotting = html.Div([
             ])
         ), style={"margin-top": "15px"}
     ),
+
+    dbc.Card(
+        dbc.CardBody([
+            html.Div([
+                dbc.Label("modify plot data"),
+                dbc.Row([dbc.Col(html.Div('  x-factor'), width=2), dbc.Col(html.Div('  y-factor'), width=2),
+                         dbc.Col(html.Div('  curve')), ]),
+                html.Div(id='modify_files'),
+            ])
+        ]
+        ), style={"margin-top": "15px", "margin-bottom": "150px"}
+    ),
+
 ]
 )
 
@@ -219,6 +232,7 @@ def update_columns(file_use):
 
 @callback(
     Output("files_saved_to_container", 'children'),
+    Output("modify_files", 'children'),
     Input("button_save_to_container", 'n_clicks'),
     Input("button_delete_containter", 'n_clicks'),
     prevent_initial_call=True
@@ -236,23 +250,27 @@ def modify_container(b1, b2):
                     data_reader.data_container['file'].append(file + '_' + item[2])
                     data_reader.data_container['x'].append(list(xy[item[1]]))
                     data_reader.data_container['y'].append(list(xy[item[2]]))
-            return f"saved: {data_reader.data_container['file']}"
+
+            modify_files_list = [dbc.Row([dbc.Col([dbc.Input(id={'type': 'input', 'index': x + '_x'}, placeholder="1",
+                                                             size="sm", type='number', value=1), ], width=2),
+                                          dbc.Col([dbc.Input(id={'type': 'input', 'index': x + '_y'}, placeholder="1",
+                                                             size="sm", type='number', value=1), ], width=2),
+                                          dbc.Col(html.Li(x)), ]) for x in data_reader.data_container['file']]
+
+            return f"saved: {data_reader.data_container['file']}", modify_files_list
         if len(item) == 0:
-            return f"no files saved"
+            return f"no files saved", []
 
     if triggered_id == 'button_delete_containter':
         data_reader.data_container = {'x': [], 'y': [], 'file': []}
         data_reader.current_item_container = []
-        return 'data container deleted'
+        return 'data container deleted', []
 
 
 @callback(
     Output("line-chart", "figure"),
-    # Output("scatter-chart", "figure"),
     Output("grid", "rowData"),
     Output("grid", "columnDefs"),
-    # Output('switch_markers', 'value'),
-    # Output('switch_lines_markers', 'value'),
     # read files from
     Input('file_use', 'value'),
     Input('columns_x', 'value'),
@@ -268,9 +286,11 @@ def modify_container(b1, b2):
     Input('switch_x_rev', 'value'),
     Input('switch_y_rev', 'value'),
     Input('switch_legend', 'value'),
+    # data manipulation
+    Input({'type': 'input', 'index': ALL}, 'value'),
 )
 def update_plot(file_use, x, y, input_x_label, input_y_label, input_plot_label, switch_markers, switch_lines_markers,
-                switch_x_log, switch_y_log, switch_x_rev, switch_y_rev, switch_legend):
+                switch_x_log, switch_y_log, switch_x_rev, switch_y_rev, switch_legend, input_values):
     if len(data_reader.data_container['file']) == 0:
         if not file_use or x == '' or y == '':
             print('no files selected to update plot')
@@ -300,8 +320,14 @@ def update_plot(file_use, x, y, input_x_label, input_y_label, input_plot_label, 
     if len(data_reader.data_container['file']) > 0:
         print('saved_plot')
         for i, file in enumerate(data_reader.data_container['file']):
-            fig.add_trace(go.Scatter(x=data_reader.data_container['x'][i], y=data_reader.data_container['y'][i],
-                                     mode='lines', name=file,
+            if input_values[2 * i] is None:
+                input_values[2 * i] = 1
+            x_data_manipulated = [x * input_values[2 * i] for x in data_reader.data_container['x'][i]]
+            if input_values[2 * i + 1] is None:
+                input_values[2 * i + 1] = 1
+            y_data_manipulated = [x * input_values[2 * i + 1] for x in data_reader.data_container['y'][i]]
+
+            fig.add_trace(go.Scatter(x=x_data_manipulated, y=y_data_manipulated, mode='lines', name=file,
                                      line=dict(color=px.colors.qualitative.D3[i + count_plot_color])))
 
     if switch_x_rev:
@@ -328,7 +354,6 @@ def update_plot(file_use, x, y, input_x_label, input_y_label, input_plot_label, 
         fig.update_layout(showlegend=False)
 
     fig.update_layout(title={'text': input_plot_label, 'y': 0.95, 'x': 0.4}, height=800)
-    # fig.update_layout(xaxis_range=[0, 2], yaxis_range=[0, 100])
 
     return fig, data_plot.to_dict("records"), [{"field": i} for i in data_plot.columns]
 

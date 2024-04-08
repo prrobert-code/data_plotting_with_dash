@@ -37,7 +37,7 @@ class GetData:
             for col in data.columns:
                 data[col] = pd.to_numeric(data[col], errors='coerce')
             if 'arc_length' in data.columns:
-                data['arc_length'] = data['arc_length'] * -1.0e4
+                data['arc_length'] = data['arc_length'] * 1.0e4
             data['file'] = filename
             return data
 
