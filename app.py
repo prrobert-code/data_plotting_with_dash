@@ -133,8 +133,9 @@ plotting = html.Div([
                          dbc.Input(id="input_x_label", placeholder="x label", size="sm"),
                          dbc.Input(id="input_y_label", placeholder="y label", size="sm"),
                          dbc.Input(id="input_plot_label", placeholder="plot title", size="sm")], width=2),
-                dbc.Col([html.P('plot style'), dbc.Switch(id="switch_markers", label="markers", value=False),
-                         dbc.Switch(id="switch_lines_markers", label="lines+markers", value=False)], width=2),
+                dbc.Col([html.P('plot style'),
+                         dbc.RadioItems(id="radio_items_plot_style", options=["markers", "lines+markers",
+                                                                              'lines'], value="lines", ),], width=2),
                 dbc.Col([html.P('axis log'), dbc.Switch(id="switch_x_log", label="log x", value=False),
                          dbc.Switch(id="switch_y_log", label="log y", value=False)], width=2),
                 dbc.Col([html.P('axis reverse'), dbc.Switch(id="switch_x_rev", label="reverse x", value=False),
@@ -149,8 +150,10 @@ plotting = html.Div([
         dbc.CardBody([
             html.Div([
                 dbc.Label("modify plot data"),
-                dbc.Row([dbc.Col(html.Div('  x-factor'), width=2), dbc.Col(html.Div('  y-factor'), width=2),
-                         dbc.Col(html.Div('  curve')), ]),
+                dbc.Row([dbc.Col(html.Div('  x-factor'), width=1),
+                         dbc.Col(html.Div('  y-factor'), width=1),
+                         dbc.Col(html.Div('  curve label'), width=3),
+                         dbc.Col(html.Div('  curve identifier'), width=7), ]),
                 html.Div(id='modify_files'),
             ])
         ]
@@ -251,11 +254,13 @@ def modify_container(b1, b2):
                     data_reader.data_container['x'].append(list(xy[item[1]]))
                     data_reader.data_container['y'].append(list(xy[item[2]]))
 
-            modify_files_list = [dbc.Row([dbc.Col([dbc.Input(id={'type': 'input', 'index': x + '_x'}, placeholder="1",
-                                                             size="sm", type='number', value=1), ], width=2),
-                                          dbc.Col([dbc.Input(id={'type': 'input', 'index': x + '_y'}, placeholder="1",
-                                                             size="sm", type='number', value=1), ], width=2),
-                                          dbc.Col(html.Li(x)), ]) for x in data_reader.data_container['file']]
+            modify_files_list = [dbc.Row([dbc.Col([dbc.Input(id={'type': 'input', 'index': x + '_x'},
+                                                             size="sm", type='number', value=1), ], width=1),
+                                          dbc.Col([dbc.Input(id={'type': 'input', 'index': x + '_y'},
+                                                             size="sm", type='number', value=1), ], width=1),
+                                          dbc.Col([dbc.Input(id={'type': 'input', 'index': x + '_label'},
+                                                             size="sm", type='text', value=x), ], width=3),
+                                          dbc.Col(html.Li(x), width=7), ]) for x in data_reader.data_container['file']]
 
             return f"saved: {data_reader.data_container['file']}", modify_files_list
         if len(item) == 0:
@@ -279,8 +284,7 @@ def modify_container(b1, b2):
     Input('input_x_label', 'value'),
     Input('input_y_label', 'value'),
     Input('input_plot_label', 'value'),
-    Input('switch_markers', 'value'),
-    Input('switch_lines_markers', 'value'),
+    Input('radio_items_plot_style', 'value'),
     Input('switch_x_log', 'value'),
     Input('switch_y_log', 'value'),
     Input('switch_x_rev', 'value'),
@@ -289,7 +293,7 @@ def modify_container(b1, b2):
     # data manipulation
     Input({'type': 'input', 'index': ALL}, 'value'),
 )
-def update_plot(file_use, x, y, input_x_label, input_y_label, input_plot_label, switch_markers, switch_lines_markers,
+def update_plot(file_use, x, y, input_x_label, input_y_label, input_plot_label, radio_items_plot_style, #switch_markers, switch_lines_markers,
                 switch_x_log, switch_y_log, switch_x_rev, switch_y_rev, switch_legend, input_values):
     if len(data_reader.data_container['file']) == 0:
         if not file_use or x == '' or y == '':
@@ -314,21 +318,26 @@ def update_plot(file_use, x, y, input_x_label, input_y_label, input_plot_label, 
         for i, file in enumerate(data_plot['file'].unique()):
             fig.add_trace(
                 go.Scatter(x=data_plot[data_plot['file'] == file][x], y=data_plot[data_plot['file'] == file][y],
-                           mode='lines', name=file.split('/')[-1], line=dict(color=px.colors.qualitative.D3[i])))
+                           mode=radio_items_plot_style, name=file.split('/')[-1], line=dict(color=px.colors.qualitative.D3[i])))
             count_plot_color += 1
 
     if len(data_reader.data_container['file']) > 0:
         print('saved_plot')
+        print(input_values)
         for i, file in enumerate(data_reader.data_container['file']):
-            if input_values[2 * i] is None:
-                input_values[2 * i] = 1
-            x_data_manipulated = [x * input_values[2 * i] for x in data_reader.data_container['x'][i]]
-            if input_values[2 * i + 1] is None:
-                input_values[2 * i + 1] = 1
-            y_data_manipulated = [x * input_values[2 * i + 1] for x in data_reader.data_container['y'][i]]
+            if input_values[3 * i] is None:
+                input_values[3 * i] = 1
+            x_data_manipulated = [x * input_values[3 * i] for x in data_reader.data_container['x'][i]]
+            if input_values[3 * i + 1] is None:
+                input_values[3 * i + 1] = 1
+            y_data_manipulated = [x * input_values[3 * i + 1] for x in data_reader.data_container['y'][i]]
+            plot_label = input_values[3 * i + 2]
+            fig.add_trace(go.Scatter(x=x_data_manipulated, y=y_data_manipulated, mode=radio_items_plot_style,
+                                     name=plot_label, line=dict(color=px.colors.qualitative.D3[i + count_plot_color])))
 
-            fig.add_trace(go.Scatter(x=x_data_manipulated, y=y_data_manipulated, mode='lines', name=file,
-                                     line=dict(color=px.colors.qualitative.D3[i + count_plot_color])))
+    fig.update_layout(xaxis=dict(showexponent='all', exponentformat='e'))
+    fig.update_layout(yaxis=dict(showexponent='all', exponentformat='e'))
+    fig.update_layout(template='plotly')  # "plotly", "plotly_white", "plotly_dark", "ggplot2", "seaborn", "simple_white"
 
     if switch_x_rev:
         fig.update_xaxes(autorange="reversed")
@@ -342,13 +351,6 @@ def update_plot(file_use, x, y, input_x_label, input_y_label, input_plot_label, 
         fig.update_xaxes(type="log")
     if switch_y_log:
         fig.update_yaxes(type="log")
-
-    if switch_markers:
-        fig.update_traces(mode='markers')
-    elif switch_lines_markers:
-        fig.update_traces(mode='lines+markers')
-    else:
-        fig.update_traces(mode='lines')
 
     if not switch_legend:
         fig.update_layout(showlegend=False)
