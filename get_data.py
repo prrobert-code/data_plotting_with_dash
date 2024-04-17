@@ -9,8 +9,9 @@ class GetData:
         self.file_list = []
         self.file_list_short = []
         self.file_type = '.plt'
-        self.data_container = {'x': [], 'y': [], 'file': []}
+        self.data_container = {'x': [], 'y': [], 'file': [], 'curve_identifier': []}
         self.current_item_container = []
+        self.curve_save_counter = 1
 
     def save_file_to_file_list(self, filelist):
         for file in filelist:
