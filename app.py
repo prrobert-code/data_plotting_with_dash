@@ -124,12 +124,14 @@ controls = html.Div([
 
 # Assemble right side of the page
 plotting = html.Div([
+    # Plot area
     dbc.Card(
         dbc.Tabs([
             dbc.Tab([dcc.Graph(id="line-chart", figure=px.line(), config=config)], label="Line Chart"),
             dbc.Tab([grid], label="Data Table", className="p-4")
         ])
     ),
+    # Plot style area
     dbc.Card(
         dbc.CardBody(
             dbc.Row([
@@ -139,7 +141,7 @@ plotting = html.Div([
                          dbc.Input(id="input_plot_label", placeholder="plot title", size="sm")], width=2),
                 dbc.Col([html.P('plot style'),
                          dbc.RadioItems(id="radio_items_plot_style", options=["markers", "lines+markers",
-                                                                              'lines'], value="lines", ),], width=2),
+                                                                              'lines'], value="lines", ), ], width=2),
                 dbc.Col([html.P('axis log'), dbc.Switch(id="switch_x_log", label="log x", value=False),
                          dbc.Switch(id="switch_y_log", label="log y", value=False)], width=2),
                 dbc.Col([html.P('axis reverse'), dbc.Switch(id="switch_x_rev", label="reverse x", value=False),
@@ -149,7 +151,7 @@ plotting = html.Div([
             ])
         ), style={"margin-top": "15px"}
     ),
-
+    # Modify plot data area (curve label, fixed value multiplication, ...)
     dbc.Card(
         dbc.CardBody([
             html.Div([
@@ -164,20 +166,16 @@ plotting = html.Div([
         ]
         ), style={"margin-top": "15px"}
     ),
-
+    # Input formula area
     dbc.Card(
         dbc.CardBody([
-            #html.Div([
-            #    dbc.Label("calculate new curve"),
-            #    dbc.Input(id="calculate_new_curve_formula", placeholder="put in your formula", size="sm"),
-            #]),
             dbc.Row([
                 html.P("calculate new curve"),
-                dbc.Col([dbc.Input(id="input_new_curve_formula", placeholder="put in your formula", size="sm")], width=5),
+                dbc.Col([dbc.Input(id="input_new_curve_formula", size="sm")], width=5),
                 dbc.Col(dbc.Button("calculate curve", id="button_new_curve_calc", n_clicks=0, size="sm"), width=2),
             ])
         ]
-        ), style={"margin-top": "15px", "margin-bottom": "150px"}
+        ), style={"margin-top": "15px", "margin-bottom": "200px"}
     ),
 
 ]
@@ -260,10 +258,33 @@ def update_columns(file_use):
     Output("modify_files", 'children'),
     Input("button_save_to_container", 'n_clicks'),
     Input("button_delete_containter", 'n_clicks'),
+    # calculate new curve with curve identifier
+    Input('button_new_curve_calc', 'n_clicks'),
+    Input('input_new_curve_formula', 'value'),
     prevent_initial_call=True
 )
-def modify_container(b1, b2):
+def modify_container(b1, b2, b3, input_formula):
     triggered_id = ctx.triggered_id
+
+    # read data_container and prepare the input fields for plot modification
+    def prepare_input_form_for_plot():
+        modify_files_list = [dbc.Row([dbc.Col([dbc.Input(id={'type': 'input', 'index': x[0] + '_x'},
+                                                         size="sm", type='number', value=1), ], width=1),
+                                      dbc.Col([dbc.Input(id={'type': 'input', 'index': x[0] + '_y'},
+                                                         size="sm", type='number', value=1), ], width=1),
+                                      dbc.Col([dbc.Input(id={'type': 'input', 'index': x[0] + '_label'},
+                                                         size="sm", type='text', value=x[0]), ], width=3),
+                                      dbc.Col(x[1], width=1), dbc.Col(x[0], width=6), ])
+                             for x in
+                             zip(data_reader.data_container['file'], data_reader.data_container['curve_identifier'])]
+        return modify_files_list
+
+    if triggered_id == 'button_delete_containter':
+        data_reader.data_container = {'x': [], 'y': [], 'file': [], 'curve_identifier': []}
+        data_reader.current_item_container = []
+        data_reader.curve_save_counter = 1
+        return 'no data yet', []
+
     if triggered_id == 'button_save_to_container':
         item = data_reader.current_item_container  # item = [[selected files] , colX, colY]
         file_list = data_reader.file_list
@@ -278,24 +299,55 @@ def modify_container(b1, b2):
                     data_reader.data_container['y'].append(list(xy[item[2]]))
                     data_reader.data_container['curve_identifier'].append(f'C{data_reader.curve_save_counter}')
                     data_reader.curve_save_counter += 1
-        # read data_container and prepare the input fields for plot modification
-        modify_files_list = [dbc.Row([dbc.Col([dbc.Input(id={'type': 'input', 'index': x[0] + '_x'},
-                                                             size="sm", type='number', value=1), ], width=1),
-                                          dbc.Col([dbc.Input(id={'type': 'input', 'index': x[0] + '_y'},
-                                                             size="sm", type='number', value=1), ], width=1),
-                                          dbc.Col([dbc.Input(id={'type': 'input', 'index': x[0] + '_label'},
-                                                             size="sm", type='text', value=x[0]), ], width=3),
-                                          dbc.Col(x[1], width=1), dbc.Col(x[0], width=6), ])
-                                 for x in
-                                 zip(data_reader.data_container['file'], data_reader.data_container['curve_identifier'])]
 
-        return f"saved: {data_reader.data_container['file']}", modify_files_list
+        return f"saved: {data_reader.data_container['file']}", prepare_input_form_for_plot()
 
-    if triggered_id == 'button_delete_containter':
-        data_reader.data_container = {'x': [], 'y': [], 'file': [], 'curve_identifier': []}
-        data_reader.current_item_container = []
-        data_reader.curve_save_counter = 1
-        return 'data container deleted', []
+    if triggered_id == 'button_new_curve_calc':
+        if input_formula is None or len(input_formula) == 0:
+            if len(data_reader.data_container['file']) == 0:
+                return 'no data yet', []
+            return f"saved: {data_reader.data_container['file']}", prepare_input_form_for_plot()
+
+        curve_ident_calculation = re.findall(r'C\d+', input_formula)  # detect curve identifier for calculation
+        print('formula: ', input_formula, 'saved identifier: ', data_reader.data_container['curve_identifier'],
+              'found curve ident: ', curve_ident_calculation)
+        if len(curve_ident_calculation) == 0:
+            print("No curve ident found in formula")
+            return f"saved: {data_reader.data_container['file']}", prepare_input_form_for_plot()
+
+        # replace C1, C2,.. parameter in formula to get correct data from data_container
+        for parameter in curve_ident_calculation:
+            try:
+                index = data_reader.data_container['curve_identifier'].index(parameter)
+                input_formula = input_formula.replace(parameter, f'data_reader.data_container["y"][{index}][i]')
+            # error if e.g. curve is called which does not exist
+            except Exception as e:
+                print("Error during data loading for curve calculation:", e)
+                return f"saved: {data_reader.data_container['file']}", prepare_input_form_for_plot()
+
+        # point-wise calculation of curve values and plot result
+        first_index = data_reader.data_container['curve_identifier'].index(curve_ident_calculation[0])
+        results = []
+        for i in range(len(data_reader.data_container['y'][first_index])):
+            try:
+                res = eval(input_formula)
+                results.append(res)
+            except Exception as e:
+                print("Error during curve calculation:", e)
+                return f"saved: {data_reader.data_container['file']}", prepare_input_form_for_plot()
+
+        data_reader.data_container['file'].append(f'C{data_reader.curve_save_counter}_calculation')
+        data_reader.data_container['x'].append(data_reader.data_container['x'][first_index])
+        data_reader.data_container['y'].append(results)
+        data_reader.data_container['curve_identifier'].append(f'C{data_reader.curve_save_counter}')
+        data_reader.curve_save_counter += 1
+
+        return f"saved: {data_reader.data_container['file']}", prepare_input_form_for_plot()
+
+    if len(input_formula) >= 0:
+        if len(data_reader.data_container['file']) == 0:
+            return 'no data yet', []
+        return f"saved: {data_reader.data_container['file']}", prepare_input_form_for_plot()
 
 
 @callback(
@@ -318,12 +370,9 @@ def modify_container(b1, b2):
     Input('switch_legend', 'value'),
     # data manipulation
     Input({'type': 'input', 'index': ALL}, 'value'),
-    # calculate new curve with curve identifier
-    Input('button_new_curve_calc', 'n_clicks'),
-    Input('input_new_curve_formula', 'value'),
 )
 def update_plot(file_use, x, y, input_x_label, input_y_label, input_plot_label, radio_items_plot_style,
-                switch_x_log, switch_y_log, switch_x_rev, switch_y_rev, switch_legend, input_values, b1, input_formula):
+                switch_x_log, switch_y_log, switch_x_rev, switch_y_rev, switch_legend, input_values):
     triggered_id = ctx.triggered_id
     if len(data_reader.data_container['file']) == 0:
         if not file_use or x == '' or y == '':
@@ -349,7 +398,8 @@ def update_plot(file_use, x, y, input_x_label, input_y_label, input_plot_label, 
         for i, file in enumerate(data_plot['file'].unique()):
             fig.add_trace(
                 go.Scatter(x=data_plot[data_plot['file'] == file][x], y=data_plot[data_plot['file'] == file][y],
-                           mode=radio_items_plot_style, name=file.split('/')[-1], line=dict(color=px.colors.qualitative.D3[i])))
+                           mode=radio_items_plot_style, name=file.split('/')[-1],
+                           line=dict(color=px.colors.qualitative.D3[i])))
             count_plot_color += 1
 
     # plot saved data from data_container
@@ -368,37 +418,10 @@ def update_plot(file_use, x, y, input_x_label, input_y_label, input_plot_label, 
                                      name=plot_label, line=dict(color=px.colors.qualitative.D3[count_plot_color])))
             count_plot_color += 1
 
-    if triggered_id == 'button_new_curve_calc':
-        curve_ident_calculation = re.findall(r'C\d+', input_formula)  # detect curve identifier for calculation
-        print('calculate curve: ', input_formula, 'all identifier: ', data_reader.data_container['curve_identifier'],
-              'use identifier for calculation: ', curve_ident_calculation)
-        # replace C1, C2,.. parameter in formula to get correct data from data_container
-        for parameter in curve_ident_calculation:
-            try:
-                index = data_reader.data_container['curve_identifier'].index(parameter)
-                input_formula = input_formula.replace(parameter, f'data_reader.data_container["y"][{index}][i]')
-            # error if e.g. curve is called which does not exist
-            except Exception as e:
-                print("Error during data loading for curve calculation:", e)
-                break
-
-        # point-wise calculation of curve values and plot result
-        first_index = data_reader.data_container['curve_identifier'].index(curve_ident_calculation[0])
-        results = []
-        for i in range(len(data_reader.data_container['y'][first_index])):
-            try:
-                res = eval(input_formula)
-                results.append(res)
-            except Exception as e:
-                print("Error during curve calculation:", e)
-        fig.add_trace(go.Scatter(x=data_reader.data_container['x'][0], y=results, mode=radio_items_plot_style,
-                                 name='calculated', line=dict(color=px.colors.qualitative.D3[count_plot_color])))
-        count_plot_color += 1
-
-
     fig.update_layout(xaxis=dict(showexponent='all', exponentformat='e'))
     fig.update_layout(yaxis=dict(showexponent='all', exponentformat='e'))
-    fig.update_layout(template='ggplot2')  # "plotly", "plotly_white", "plotly_dark", "ggplot2", "seaborn", "simple_white"
+    fig.update_layout(
+        template='ggplot2')  # "plotly", "plotly_white", "plotly_dark", "ggplot2", "seaborn", "simple_white"
 
     if switch_x_rev:
         fig.update_xaxes(autorange="reversed")
