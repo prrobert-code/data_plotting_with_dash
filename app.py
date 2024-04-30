@@ -53,7 +53,7 @@ save_button = html.Div(
     [
         html.P("Keep selection in plot"),
         dbc.Row([dbc.Col(dbc.Button("keep data", id="button_save_to_container", n_clicks=0), width=3),
-                 dbc.Col(dbc.Button("remove data", id="button_delete_containter", n_clicks=0, color="warning")), ]),
+                 dbc.Col(dbc.Button("remove data", id="button_delete_container", n_clicks=0, color="warning")), ]),
         html.P(" "),
         dbc.Alert("no data yet", id="files_saved_to_container", color="success", style={'font-size': 13}),
     ],
@@ -156,11 +156,12 @@ plotting = html.Div([
         dbc.CardBody([
             html.Div([
                 dbc.Label("modify plot data"),
-                dbc.Row([dbc.Col(html.Div('  x-factor'), width=1),
-                         dbc.Col(html.Div('  y-factor'), width=1),
-                         dbc.Col(html.Div('  curve label'), width=3),
-                         dbc.Col(html.Div('  curve ident'), width=1),
-                         dbc.Col(html.Div('  curve name'), width=6), ]),
+                dbc.Row([dbc.Col(html.Div('x-factor', className='text-left'), width=1),
+                         dbc.Col(html.Div('y-factor', className='text-left'), width=1),
+                         dbc.Col(html.Div('curve label', className='text-left'), width=3),
+                         dbc.Col(html.Div('curve ident', className='text-left'), width=1),
+                         dbc.Col(html.Div('curve name', className='text-left'), width=5),
+                         dbc.Col(html.Div('delete', className='text-left'), width=1), ]),
                 html.Div(id='modify_files'),
             ])
         ]
@@ -257,15 +258,15 @@ def update_columns(file_use):
     Output("files_saved_to_container", 'children'),
     Output("modify_files", 'children'),
     Input("button_save_to_container", 'n_clicks'),
-    Input("button_delete_containter", 'n_clicks'),
+    Input("button_delete_container", 'n_clicks'),
     # calculate new curve with curve identifier
     Input('button_new_curve_calc', 'n_clicks'),
     Input('input_new_curve_formula', 'value'),
+    Input({'type': 'button', 'index': ALL}, 'n_clicks'),
     prevent_initial_call=True
 )
-def modify_container(b1, b2, b3, input_formula):
+def modify_container(b1, b2, b3, input_formula, button_values):
     triggered_id = ctx.triggered_id
-
     # read data_container and prepare the input fields for plot modification
     def prepare_input_form_for_plot():
         modify_files_list = [dbc.Row([dbc.Col([dbc.Input(id={'type': 'input', 'index': x[0] + '_x'},
@@ -274,12 +275,27 @@ def modify_container(b1, b2, b3, input_formula):
                                                          size="sm", type='number', value=1), ], width=1),
                                       dbc.Col([dbc.Input(id={'type': 'input', 'index': x[0] + '_label'},
                                                          size="sm", type='text', value=x[0]), ], width=3),
-                                      dbc.Col(x[1], width=1), dbc.Col(x[0], width=6), ])
+                                      dbc.Col(x[1], width=1), dbc.Col(x[0], width=5),
+                                      dbc.Col([dbc.Button('del ' + x[1], id={'type': 'button', 'index': x[0] + '_delete'},
+                                                      n_clicks=0, size="sm", color="warning")], width=1), ])
                              for x in
                              zip(data_reader.data_container['file'], data_reader.data_container['curve_identifier'])]
         return modify_files_list
 
-    if triggered_id == 'button_delete_containter':
+    # remove dataset from data_container if delete-button is clicked (clicked == 1)
+    if 1 in button_values:
+        for i, val in enumerate(button_values):
+            if val == 1:
+                print('delete: ', i, data_reader.data_container['file'][i])
+                del data_reader.data_container['x'][i]
+                del data_reader.data_container['y'][i]
+                del data_reader.data_container['file'][i]
+                del data_reader.data_container['curve_identifier'][i]
+        if len(data_reader.data_container['file']) == 0:
+            return 'no data yet', []
+        return f"saved: {data_reader.data_container['file']}", prepare_input_form_for_plot()
+
+    if triggered_id == 'button_delete_container':
         data_reader.data_container = {'x': [], 'y': [], 'file': [], 'curve_identifier': []}
         data_reader.current_item_container = []
         data_reader.curve_save_counter = 1
@@ -299,7 +315,6 @@ def modify_container(b1, b2, b3, input_formula):
                     data_reader.data_container['y'].append(list(xy[item[2]]))
                     data_reader.data_container['curve_identifier'].append(f'C{data_reader.curve_save_counter}')
                     data_reader.curve_save_counter += 1
-
         return f"saved: {data_reader.data_container['file']}", prepare_input_form_for_plot()
 
     if triggered_id == 'button_new_curve_calc':
@@ -341,7 +356,6 @@ def modify_container(b1, b2, b3, input_formula):
         data_reader.data_container['y'].append(results)
         data_reader.data_container['curve_identifier'].append(f'C{data_reader.curve_save_counter}')
         data_reader.curve_save_counter += 1
-
         return f"saved: {data_reader.data_container['file']}", prepare_input_form_for_plot()
 
     if len(input_formula) >= 0:
