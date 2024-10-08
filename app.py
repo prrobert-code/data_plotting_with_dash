@@ -7,10 +7,11 @@ import dash_ag_grid as dag
 import pandas as pd
 from get_data import GetData
 from tkinter import filedialog as fd
+#import easygui
 import re
 
 pio.templates.default = 'plotly_white'
-app = Dash(__name__, external_stylesheets=[dbc.themes.COSMO])
+app = Dash(__name__)#, external_stylesheets=[dbc.themes.COSMO])
 config = {
     'toImageButtonOptions': {
         'format': 'png',  # one of png, svg, jpeg, webp
@@ -202,6 +203,12 @@ def select_files():
         title='Open files',
         initialdir='//depmdfsbackup/Backup/User/RRoe/OpenTCADProjects/',
         filetypes=filetypes)
+    #filetypes = ['*.csv', '*.plt']
+    #filenames = easygui.fileopenbox(
+    #    title='Open files',
+    #    filetypes=filetypes,
+    #    multiple=True
+    #)
     return filenames
 
 
